@@ -65,8 +65,11 @@ core su un nodo. Il job può essere inviato al sistema con il comando
 sbatch run-omp-program.sh
 ```
 
-al termine del quale verrà creato sulla directory corrente un file
-`slurm-NNNNN.out` il cui contenuto sarà simile a
+Per monitorare lo stato di avanzamento dei job in coda si usa il
+comando `squeue`; per cancellare un proprio job si usa `scancel <job_id>`.
+
+Al termine dell'esecuzione verrà creato un file `slurm-NNNNN.out`
+sulla directory corrente il cui contenuto sarà simile a
 
 ```
 == Running with 4 threads ==
@@ -79,7 +82,7 @@ Hello from core 1 of 4
 
 ## Esecuzione di programmi C/MPI
 
-Consideriamo il programma MPI seguente:
+Consideriamo il programma `mpi-program.c` seguente:
 
 ```C
 // mpi-program.c
@@ -101,7 +104,7 @@ int main( int argc, char *argv[] )
 }
 ```
 
-Per compilare si può usare il comando
+Per compilare si usa il comando
 
 ```bash
 mpicc mpi-program.c -o mpi-program
@@ -168,7 +171,7 @@ int main(void)
 }
 ```
 
-Al momento il compilatore NVidia non è installato sul nodo frontend;
+Al momento il compilatore NVidia non è installato sul front-end;
 occorre quindi che nel job sia presente anche il comando di
 compilazione. A tale scopo si può usare il file `run-cuda-program.sh`
 seguente:
@@ -187,7 +190,7 @@ nvcc cuda-program.cu -o cuda-program && srun ./cuda-program
 echo "=== End of Job ==="
 ```
 
-che produrrà il solito file di input con contenuto:
+che produrrà il solito file di output
 
 ```
 === CUDA program starts ===
@@ -196,7 +199,7 @@ Hello World!
 ```
 
 
-## Istruzioni 
+## Istruzioni per applicazioni Python
 
 Una possibile impostazione del lavoro potrebbe essere 
 1. creare un virtual environment Python (ad esempio usando il comando `virtualenv`);
