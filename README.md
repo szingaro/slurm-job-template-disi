@@ -12,7 +12,194 @@ In caso di necessità di maggiore spazio potrai ricorrere alla creazione di una 
 
 `/home/` utente e `/public/` sono spazi di archiviazione condivisi tra le macchine, potrai dunque creare l'ambiente di esecuzione e i file necessari all'elaborazione sulla macchina **SLURM** ([slurm.cs.unibo.it](http://slurm..cs.unibo.it)) da cui poi avviare il *job* che verrà eseguito sulle macchine dotate di GPU.
 
-## Istruzioni 
+## Esecuzione di programmi C/OpenMP
+
+Attualmente i nodi del cluster usano processori quad-core su un
+singolo socket. Di conseguenza, nell'esecuzione di programmi OpenMP
+sarà possibile chiedere un massimo di 4 core.
+
+Consideriamo il programma `omp-program.c` seguente:
+
+```C
+// omp-program.c
+#include <stdio.h>
+#include <omp.h>
+
+int main( void )
+{
+#pragma omp parallel
+    printf( "Hello from core %d of %d\n",
+            omp_get_thread_num(), omp_get_num_threads() );
+    return 0;
+}
+```
+
+Occorre innanzitutto compilarlo usando il flag `-fopenmp` del
+compilatore _gcc_:
+
+```bash
+gcc -fopenmp omp-program.c -o omp-program
+```
+
+Fatto questo, è necessario creare uno script SLURM
+`run-omp-program.sh` come il seguente, supponendo di volere utilizzare
+quattro core:
+
+```bash
+#!/bin/bash
+# run-omp-program.sh
+
+#SBATCH --cpus-per-task 4
+#SBATCH --output slurm-%j.out
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+echo "== Running with $OMP_NUM_THREADS threads =="
+srun ./omp-program
+echo "== End of Job =="
+```
+
+Il parametro `--cpus-per-task 4` richiede a SLURM di allocare quattro
+core su un nodo. Il job può essere inviato al sistema con il comando
+
+```bash
+sbatch run-omp-program.sh
+```
+
+Per monitorare lo stato di avanzamento dei job in coda si usa il
+comando `squeue`; per cancellare un proprio job si usa `scancel <job_id>`.
+
+Al termine dell'esecuzione verrà creato un file `slurm-NNNNN.out`
+sulla directory corrente il cui contenuto sarà simile a
+
+```
+== Running with 4 threads ==
+Hello from core 0 of 4
+Hello from core 2 of 4
+Hello from core 3 of 4
+Hello from core 1 of 4
+== End of Job ==
+```
+
+## Esecuzione di programmi C/MPI
+
+Consideriamo il programma `mpi-program.c` seguente:
+
+```C
+// mpi-program.c
+#include <stdio.h>
+#include <mpi.h>
+
+int main( int argc, char *argv[] )
+{
+	int rank, size, len;
+	char hostname[MPI_MAX_PROCESSOR_NAME];
+	MPI_Init( &argc, &argv );
+	MPI_Comm_rank( MPI_COMM_WORLD, &rank);
+	MPI_Comm_size( MPI_COMM_WORLD, &size);
+	MPI_Get_processor_name( hostname, &len );
+	printf( "Hello from processor %d of %d running on %s\n",
+		rank, size, hostname);
+	MPI_Finalize();
+	return 0;
+}
+```
+
+Per compilare si usa il comando
+
+```bash
+mpicc mpi-program.c -o mpi-program
+```
+
+Per eseguire su 12 core si può usare lo script `run-omp-program.sh`
+seguente:
+
+```bash
+#!/bin/bash
+# run-omp-program.sh
+
+#SBATCH -n 12
+#SBATCH --output slurm-%j.out
+
+echo "== Running with $SLURM_NTASKS tasks =="
+srun --mpi=pmix_v4 -n $SLURM_NTASKS ./mpi-program
+echo "== End of Job =="
+```
+
+(attenzione al parametro `---mpi=mpix_v4` che è importante per la
+corretta esecuzione). Dopo aver sottomesso il job con
+
+```
+sbatch run-omp-program.sh
+```
+
+al termine dell'esecuzione verrà creato un file di output
+`slurm-NNNNN.out` il cui contenuto sarà simile a
+
+```
+== Running with 12 tasks ==
+Hello from processor 1 of 12 running on ws3gpu2
+Hello from processor 3 of 12 running on ws3gpu2
+Hello from processor 2 of 12 running on ws3gpu2
+Hello from processor 0 of 12 running on ws3gpu2
+Hello from processor 8 of 12 running on ws4gpu2
+Hello from processor 4 of 12 running on ws4gpu1
+Hello from processor 9 of 12 running on ws4gpu2
+Hello from processor 10 of 12 running on ws4gpu2
+Hello from processor 11 of 12 running on ws4gpu2
+Hello from processor 5 of 12 running on ws4gpu1
+Hello from processor 6 of 12 running on ws4gpu1
+Hello from processor 7 of 12 running on ws4gpu1
+== End of Job ==
+
+```
+
+## Esecuzione di programmi CUDA/C
+
+Consideriamo il programma `cuda-program.cu` seguente:
+
+```C
+// cuda-program.cu
+#include <stdio.h>
+
+__global__ void mykernel(void) { }
+
+int main(void)
+{
+	mykernel<<<1,1>>>( );
+	printf("Hello World!\n");
+	return 0;
+}
+```
+
+Al momento il compilatore NVidia non è installato sul front-end;
+occorre quindi che nel job sia presente anche il comando di
+compilazione. A tale scopo si può usare il file `run-cuda-program.sh`
+seguente:
+
+```bash
+#!/bin/bash
+# run-cuda-program.sh
+
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --output slurm-%j.out
+
+echo "=== CUDA program starts ==="
+nvcc cuda-program.cu -o cuda-program && srun ./cuda-program
+echo "=== End of Job ==="
+```
+
+che produrrà il solito file di output
+
+```
+=== CUDA program starts ===
+Hello World!
+=== End of Job ===
+```
+
+
+## Istruzioni per applicazioni Python
 
 Una possibile impostazione del lavoro potrebbe essere 
 1. creare un virtual environment Python (ad esempio usando il comando `virtualenv`);
